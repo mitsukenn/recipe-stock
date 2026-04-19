@@ -1,6 +1,6 @@
 {
-  "name": "わたしのレシピ帳",
-  "short_name": "レシピ帳",
+  "name": "さきちゃんのレシピ帳",
+  "short_name": "さきレシピ",
   "description": "Instagramで見た作りたい料理を保存するアプリ",
   "start_url": "./",
   "scope": "./",

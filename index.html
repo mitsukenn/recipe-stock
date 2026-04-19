@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#FFF5F7">
+  <title>わたしのレシピ帳</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: #FFF5F7;
+      font-family: 'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-font-smoothing: antialiased;
+    }
+    input, textarea, button { font-family: inherit; }
+    .loading {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; color: #9A8A9A;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"><div class="loading">読み込み中...</div></div>
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo } = React;
+
+// ========== Icons (lucide風 SVG) ==========
+const SvgIcon = ({ size = 24, color = 'currentColor', strokeWidth = 2, style, children }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke={color} strokeWidth={strokeWidth}
+    strokeLinecap="round" strokeLinejoin="round" style={style}>
+    {children}
+  </svg>
+);
+const Heart = (p) => <SvgIcon {...p}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></SvgIcon>;
+const Plus = (p) => <SvgIcon {...p}><path d="M5 12h14"/><path d="M12 5v14"/></SvgIcon>;
+const Search = (p) => <SvgIcon {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></SvgIcon>;
+const Home = (p) => <SvgIcon {...p}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></SvgIcon>;
+const Grid = (p) => <SvgIcon {...p}><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></SvgIcon>;
+const ChefHat = (p) => <SvgIcon {...p}><path d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z"/><path d="M6 17h12"/></SvgIcon>;
+const ArrowLeft = (p) => <SvgIcon {...p}><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></SvgIcon>;
+const Sparkles = (p) => <SvgIcon {...p}><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></SvgIcon>;
+const Trash2 = (p) => <SvgIcon {...p}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></SvgIcon>;
+const Edit3 = (p) => <SvgIcon {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></SvgIcon>;
+const ImageIcon = (p) => <SvgIcon {...p}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></SvgIcon>;
+const X = (p) => <SvgIcon {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></SvgIcon>;
+const Check = (p) => <SvgIcon {...p}><polyline points="20 6 9 17 4 12"/></SvgIcon>;
+const Link2 = (p) => <SvgIcon {...p}><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></SvgIcon>;
+const Clock = (p) => <SvgIcon {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></SvgIcon>;
+
+// ========== Constants ==========
+const COLORS = {
+  bg: '#FFF5F7',           // 薄いパステルピンクの背景
+  card: '#FFFFFF',
+  surface: '#FAF1F4',      // ほんのり色味のあるグレー
+  text: '#3D2E36',         // 黒すぎない焦げ茶っぽい
+  textMid: '#8A7882',
+  textLight: '#B5A3AB',
+  border: '#F2E4EA',
+  borderDark: '#E5D1DB',
+  accent: '#E8869B',       // メインアクセント：くすみコーラルピンク
+  accentDeep: '#D5677F',
+  accentSoft: '#FFEAEF',
+  // 互換エイリアス
+  pink: '#E8869B',
+  pinkDeep: '#D5677F',
+  lavenderDeep: '#8A7882'
+};
+
+// カテゴリー作成時に選べるパステルパレット
+const CATEGORY_PALETTES = [
+  { label: 'ピンク',     color: '#FCE0E6', deep: '#E8869B' },
+  { label: 'ベージュ',   color: '#FBE9D0', deep: '#D4A574' },
+  { label: 'ラベンダー', color: '#EFE3F5', deep: '#C9A8D4' },
+  { label: 'ミント',     color: '#DDEBDC', deep: '#A4C3A2' },
+  { label: 'ピーチ',     color: '#FBE3D2', deep: '#E8B89C' },
+  { label: 'スカイ',     color: '#DCE8F2', deep: '#9FBED4' },
+  { label: 'イエロー',   color: '#FFF4CC', deep: '#E8C547' },
+  { label: 'コーラル',   color: '#FFD9CC', deep: '#E89B7A' }
+];
+
+// 初期カテゴリー（おつまみ削除済、レンジ・簡単を追加）
+const DEFAULT_CATEGORIES = [
+  { name: 'おかず',     color: '#FCE0E6', deep: '#E8869B', emoji: '🍖' },
+  { name: 'ごはん',     color: '#FBE9D0', deep: '#D4A574', emoji: '🍚' },
+  { name: 'デザート',   color: '#EFE3F5', deep: '#C9A8D4', emoji: '🍰' },
+  { name: 'スープ',     color: '#DDEBDC', deep: '#A4C3A2', emoji: '🍲' },
+  { name: 'レンジ',     color: '#FFF4CC', deep: '#E8C547', emoji: '⚡' },
+  { name: '簡単',       color: '#FFD9CC', deep: '#E89B7A', emoji: '⏱️' },
+  { name: '作り置き',   color: '#DCE8F2', deep: '#9FBED4', emoji: '🥡' }
+];
+
+const SAMPLE_RECIPES = [];
+
+const STORAGE_KEY = 'recipe-stock-data';
+const CATEGORIES_KEY = 'recipe-stock-categories';
+const getCategory = (name, categories) => (categories || DEFAULT_CATEGORIES).find(c => c.name === name) || (categories || DEFAULT_CATEGORIES)[0];
+const formatMonth = (dateStr) => { const d = new Date(dateStr); return `${d.getFullYear()}年${d.getMonth() + 1}月`; };
+const monthKey = (dateStr) => { const d = new Date(dateStr); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+const formatDate = (dateStr) => { const d = new Date(dateStr); return `${d.getMonth() + 1}/${d.getDate()}`; };
+
+// ========== App ==========
+function RecipeStockApp() {
+  const [recipes, setRecipes] = useState([]);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('home');
+  const [selectedId, setSelectedId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) setRecipes(JSON.parse(saved));
+      else localStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_RECIPES));
+
+      const savedCats = localStorage.getItem(CATEGORIES_KEY);
+      if (savedCats) setCategories(JSON.parse(savedCats));
+      else localStorage.setItem(CATEGORIES_KEY, JSON.stringify(DEFAULT_CATEGORIES));
+    } catch (e) {
+      setRecipes(SAMPLE_RECIPES);
+      setCategories(DEFAULT_CATEGORIES);
+    }
+    setLoading(false);
+  }, []);
+
+  const saveRecipes = (newRecipes) => {
+    setRecipes(newRecipes);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newRecipes));
+    } catch (e) {
+      alert('保存できませんでした。容量が足りない可能性があります（写真サイズを小さくしてください）');
+      console.error(e);
+    }
+  };
+
+  const saveCategories = (newCategories) => {
+    setCategories(newCategories);
+    try {
+      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(newCategories));
+    } catch (e) { console.error(e); }
+  };
+
+  const addRecipe = (data) => {
+    const cat = getCategory(data.category, categories);
+    const newRecipe = {
+      id: Date.now().toString(),
+      ...data,
+      createdAt: new Date().toISOString().split('T')[0],
+      lastViewedAt: new Date().toISOString().split('T')[0],
+      cookedLogs: [],
+      emoji: data.emoji || cat.emoji
+    };
+    saveRecipes([newRecipe, ...recipes]);
+    setView('list');
+  };
+
+  const updateRecipe = (id, data) => {
+    saveRecipes(recipes.map(r => r.id === id ? { ...r, ...data } : r));
+    setView('detail');
+  };
+
+  const deleteRecipe = (id) => {
+    saveRecipes(recipes.filter(r => r.id !== id));
+    setView('list');
+  };
+
+  const markAsCooked = (id, memo = '') => {
+    const today = new Date().toISOString().split('T')[0];
+    saveRecipes(recipes.map(r => r.id === id ? {
+      ...r, cookedLogs: [...r.cookedLogs, { date: today, memo }]
+    } : r));
+  };
+
+  const updateLastViewed = (id) => {
+    const today = new Date().toISOString().split('T')[0];
+    saveRecipes(recipes.map(r => r.id === id ? { ...r, lastViewedAt: today } : r));
+  };
+
+  const resetData = () => {
+    if (confirm('サンプルデータに戻します。今のデータは消えます。よろしいですか？')) {
+      saveRecipes(SAMPLE_RECIPES);
+      setView('home');
+    }
+  };
+
+  const clearAll = () => {
+    if (confirm('すべてのレシピを削除します。本当によろしいですか？')) {
+      saveRecipes([]);
+      setView('home');
+    }
+  };
+
+  // カテゴリー操作
+  const addCategory = (cat) => {
+    if (categories.some(c => c.name === cat.name)) {
+      alert('同じ名前のカテゴリーがあります');
+      return false;
+    }
+    saveCategories([...categories, cat]);
+    return true;
+  };
+
+  const updateCategory = (oldName, cat) => {
+    if (oldName !== cat.name && categories.some(c => c.name === cat.name)) {
+      alert('同じ名前のカテゴリーがあります');
+      return false;
+    }
+    saveCategories(categories.map(c => c.name === oldName ? cat : c));
+    // レシピのカテゴリー名も更新
+    if (oldName !== cat.name) {
+      saveRecipes(recipes.map(r => r.category === oldName ? { ...r, category: cat.name } : r));
+    }
+    return true;
+  };
+
+  const deleteCategory = (name) => {
+    if (categories.length <= 1) {
+      alert('カテゴリーは1つ以上必要です');
+      return;
+    }
+    const used = recipes.filter(r => r.category === name).length;
+    const fallback = categories.find(c => c.name !== name).name;
+    const msg = used > 0
+      ? `「${name}」を削除します。このカテゴリーのレシピ ${used} 件は「${fallback}」に移動します。よろしいですか？`
+      : `「${name}」を削除します。よろしいですか？`;
+    if (!confirm(msg)) return;
+    saveCategories(categories.filter(c => c.name !== name));
+    if (used > 0) {
+      saveRecipes(recipes.map(r => r.category === name ? { ...r, category: fallback } : r));
+    }
+  };
+
+  const selected = recipes.find(r => r.id === selectedId);
+  const editing = recipes.find(r => r.id === editingId);
+
+  const handleSelect = (id) => {
+    setSelectedId(id);
+    updateLastViewed(id);
+    setView('detail');
+  };
+
+  if (loading) {
+    return (
+      <div style={{ background: COLORS.bg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: COLORS.textLight }}>
+        <div>読み込み中...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: COLORS.bg, minHeight: '100vh', color: COLORS.text,
+      paddingBottom: '80px', maxWidth: '480px', margin: '0 auto', position: 'relative'
+    }}>
+      {view === 'home' && <HomeView recipes={recipes} categories={categories} onSelect={handleSelect} onGoList={() => setView('list')} />}
+      {view === 'list' && <ListView recipes={recipes} categories={categories} onSelect={handleSelect} />}
+      {view === 'add' && <AddEditView categories={categories} onSave={addRecipe} onCancel={() => setView('home')} title="新しく保存" />}
+      {view === 'detail' && selected && <DetailView recipe={selected} categories={categories} onBack={() => setView('list')} onEdit={() => { setEditingId(selectedId); setView('edit'); }} onDelete={() => deleteRecipe(selected.id)} onCook={(memo) => markAsCooked(selected.id, memo)} />}
+      {view === 'edit' && editing && <AddEditView initial={editing} categories={categories} onSave={(data) => updateRecipe(editing.id, data)} onCancel={() => setView('detail')} title="編集する" />}
+      {view === 'settings' && <SettingsView recipes={recipes} categories={categories} onAddCategory={addCategory} onUpdateCategory={updateCategory} onDeleteCategory={deleteCategory} onClear={clearAll} />}
+
+      {view !== 'add' && view !== 'edit' && <BottomNav view={view} setView={setView} />}
+    </div>
+  );
+}
+
+// ========== Home ==========
+function HomeView({ recipes, categories, onSelect, onGoList }) {
+  const recent = useMemo(() => {
+    return [...recipes].sort((a, b) => new Date(b.lastViewedAt) - new Date(a.lastViewedAt)).slice(0, 5);
+  }, [recipes]);
+
+  const reminder = useMemo(() => {
+    const oldOnes = recipes.filter(r => {
+      const daysSince = (Date.now() - new Date(r.createdAt)) / (1000 * 60 * 60 * 24);
+      return daysSince > 30 && r.cookedLogs.length === 0;
+    });
+    if (oldOnes.length === 0) return null;
+    return oldOnes[Math.floor(Math.random() * oldOnes.length)];
+  }, [recipes]);
+
+  const categoryCounts = categories.map(c => ({
+    ...c, count: recipes.filter(r => r.category === c.name).length
+  }));
+
+  return (
+    <div style={{ padding: '20px 16px' }}>
+      <div style={{ marginBottom: '24px', paddingTop: '8px' }}>
+        <div style={{ fontSize: '24px', fontWeight: 800, color: COLORS.text, letterSpacing: '0.01em' }}>
+          わたしのレシピ帳
+        </div>
+        <div style={{ fontSize: '12px', color: COLORS.textLight, marginTop: '4px' }}>いいな、を忘れないで</div>
+      </div>
+
+      {reminder && (
+        <div onClick={() => onSelect(reminder.id)} style={{
+          background: COLORS.accentSoft,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: '16px', padding: '14px', marginBottom: '20px',
+          cursor: 'pointer'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+            <Sparkles size={14} color={COLORS.accent} />
+            <div style={{ fontSize: '12px', fontWeight: 700, color: COLORS.accent }}>こんなの保存してたよ</div>
+          </div>
+          <div style={{ background: COLORS.card, borderRadius: '12px', padding: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <RecipeThumb recipe={reminder} categories={categories} size={44} fontSize={24} radius={10} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '14px', fontWeight: 600 }}>{reminder.title}</div>
+              <div style={{ fontSize: '11px', color: COLORS.textLight, marginTop: '2px' }}>{formatMonth(reminder.createdAt)}に保存</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Section title="最近見たレシピ" icon={<Clock size={16} />} action={recipes.length > 5 ? <span onClick={onGoList} style={{ fontSize: '12px', color: COLORS.accent, fontWeight: 600, cursor: 'pointer' }}>すべて見る →</span> : null}>
+        <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px', marginLeft: '-16px', marginRight: '-16px', paddingLeft: '16px', paddingRight: '16px' }}>
+          {recent.map(r => (
+            <RecipeMiniCard key={r.id} recipe={r} categories={categories} onClick={() => onSelect(r.id)} />
+          ))}
+        </div>
+      </Section>
+
+      <Section title="カテゴリー" icon={<Grid size={16} />}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {categoryCounts.map(c => (
+            <div key={c.name} onClick={onGoList} style={{
+              background: c.color,
+              borderRadius: '14px', padding: '14px',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px'
+            }}>
+              <div style={{ fontSize: '24px' }}>{c.emoji}</div>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 700 }}>{c.name}</div>
+                <div style={{ fontSize: '11px', color: COLORS.textMid, marginTop: '1px' }}>{c.count}件</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '11px', color: COLORS.textLight }}>
+        全 {recipes.length} レシピ保存中 ♡
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, icon, action, children }) {
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {icon}
+          <div style={{ fontSize: '14px', fontWeight: 700 }}>{title}</div>
+        </div>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function RecipeThumb({ recipe, categories, size = 120, fontSize = 48, radius = 16 }) {
+  if (recipe.imageData) {
+    return (
+      <div style={{
+        width: size, height: size, borderRadius: radius,
+        backgroundImage: `url(${recipe.imageData})`,
+        backgroundSize: 'cover', backgroundPosition: 'center',
+        flexShrink: 0
+      }} />
+    );
+  }
+  const cat = getCategory(recipe.category, categories);
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: radius,
+      background: cat.color,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: fontSize, flexShrink: 0
+    }}>{recipe.emoji}</div>
+  );
+}
+
+function RecipeMiniCard({ recipe, categories, onClick }) {
+  return (
+    <div onClick={onClick} style={{ minWidth: '120px', cursor: 'pointer' }}>
+      <div style={{ position: 'relative' }}>
+        <RecipeThumb recipe={recipe} categories={categories} size={120} fontSize={48} radius={14} />
+        {recipe.cookedLogs.length > 0 && (
+          <div style={{
+            position: 'absolute', top: '8px', right: '8px', background: 'white',
+            borderRadius: '20px', padding: '3px 8px', fontSize: '10px',
+            fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px',
+            color: COLORS.accent
+          }}>
+            <ChefHat size={10} color={COLORS.accent} />
+            <span>{recipe.cookedLogs.length}</span>
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: '12px', fontWeight: 600, marginTop: '6px', lineHeight: 1.3 }}>
+        {recipe.title}
+      </div>
+    </div>
+  );
+}
+
+// ========== List ==========
+function ListView({ recipes, categories, onSelect }) {
+  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [search, setSearch] = useState('');
+
+  const months = useMemo(() => {
+    const set = new Set(recipes.map(r => monthKey(r.createdAt)));
+    return Array.from(set).sort().reverse();
+  }, [recipes]);
+
+  const filtered = useMemo(() => {
+    return recipes.filter(r => {
+      if (selectedMonth !== 'all' && monthKey(r.createdAt) !== selectedMonth) return false;
+      if (selectedCategory !== 'all' && r.category !== selectedCategory) return false;
+      if (search && !r.title.includes(search) && !(r.memo || '').includes(search) && !r.tags.some(t => t.includes(search))) return false;
+      return true;
+    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [recipes, selectedMonth, selectedCategory, search]);
+
+  return (
+    <div style={{ padding: '20px 16px' }}>
+      <div style={{ fontSize: '22px', fontWeight: 800, marginBottom: '16px', paddingTop: '8px' }}>
+        レシピ一覧
+      </div>
+
+      <div style={{ position: 'relative', marginBottom: '14px' }}>
+        <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: COLORS.textLight }} />
+        <input
+          type="text" placeholder="タイトル・メモ・タグで検索"
+          value={search} onChange={e => setSearch(e.target.value)}
+          style={{
+            width: '100%', padding: '12px 14px 12px 40px',
+            border: `1.5px solid ${COLORS.border}`, borderRadius: '14px',
+            fontSize: '13px', background: COLORS.card, outline: 'none', boxSizing: 'border-box'
+          }}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', marginBottom: '12px', paddingBottom: '4px', marginLeft: '-16px', marginRight: '-16px', paddingLeft: '16px', paddingRight: '16px' }}>
+        <Chip active={selectedMonth === 'all'} onClick={() => setSelectedMonth('all')}>すべての月</Chip>
+        {months.map(m => (
+          <Chip key={m} active={selectedMonth === m} onClick={() => setSelectedMonth(m)}>
+            {m.split('-')[0].slice(2)}年{parseInt(m.split('-')[1])}月
+          </Chip>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', marginBottom: '16px', paddingBottom: '4px', marginLeft: '-16px', marginRight: '-16px', paddingLeft: '16px', paddingRight: '16px' }}>
+        <Chip active={selectedCategory === 'all'} onClick={() => setSelectedCategory('all')}>全部</Chip>
+        {categories.map(c => (
+          <Chip key={c.name} active={selectedCategory === c.name} onClick={() => setSelectedCategory(c.name)} color={c.color} borderColor={c.deep}>
+            {c.emoji} {c.name}
+          </Chip>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: COLORS.textLight, fontSize: '13px' }}>
+          {recipes.length === 0 ? '右下の＋ボタンから保存してみよう！' : '該当するレシピがないよ'}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          {filtered.map(r => <RecipeCard key={r.id} recipe={r} categories={categories} onClick={() => onSelect(r.id)} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Chip({ children, active, onClick, color, borderColor }) {
+  // colorあり=カテゴリーチップ：activeで該当パステル色
+  // colorなし=月／全部チップ：activeでダークグレー
+  const activeBg = color || COLORS.text;
+  const activeBorder = borderColor || color || COLORS.text;
+  const activeText = color ? COLORS.text : '#FFFFFF';
+  return (
+    <div onClick={onClick} style={{
+      padding: '7px 13px', borderRadius: '20px',
+      background: active ? activeBg : COLORS.card,
+      border: `1px solid ${active ? activeBorder : COLORS.border}`,
+      fontSize: '12px', fontWeight: active ? 700 : 500,
+      cursor: 'pointer', whiteSpace: 'nowrap',
+      color: active ? activeText : COLORS.text, flexShrink: 0
+    }}>{children}</div>
+  );
+}
+
+function RecipeCard({ recipe, categories, onClick }) {
+  const cat = getCategory(recipe.category, categories);
+  const thumbStyle = recipe.imageData ? {
+    backgroundImage: `url(${recipe.imageData})`,
+    backgroundSize: 'cover', backgroundPosition: 'center'
+  } : { background: cat.color };
+
+  return (
+    <div onClick={onClick} style={{
+      background: COLORS.card,
+      border: `1px solid ${COLORS.border}`,
+      borderRadius: '14px',
+      overflow: 'hidden', cursor: 'pointer'
+    }}>
+      <div style={{
+        aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '56px', position: 'relative', ...thumbStyle
+      }}>
+        {!recipe.imageData && recipe.emoji}
+        {recipe.cookedLogs.length > 0 && (
+          <div style={{
+            position: 'absolute', top: '8px', right: '8px', background: 'white',
+            borderRadius: '20px', padding: '3px 8px', fontSize: '10px',
+            fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px',
+            color: COLORS.accent
+          }}>
+            <ChefHat size={10} color={COLORS.accent} />
+            <span>{recipe.cookedLogs.length}</span>
+          </div>
+        )}
+        <div style={{
+          position: 'absolute', bottom: '6px', left: '6px',
+          background: cat.color,
+          borderRadius: '8px', padding: '3px 8px', fontSize: '10px', fontWeight: 700,
+          color: COLORS.text
+        }}>{cat.emoji} {cat.name}</div>
+      </div>
+      <div style={{ padding: '10px 12px' }}>
+        <div style={{ fontSize: '13px', fontWeight: 700, lineHeight: 1.3, marginBottom: '4px' }}>
+          {recipe.title}
+        </div>
+        <div style={{ fontSize: '10px', color: COLORS.textLight }}>
+          {formatMonth(recipe.createdAt)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========== Add / Edit ==========
+function AddEditView({ initial, categories, onSave, onCancel, title }) {
+  const [formTitle, setFormTitle] = useState(initial?.title || '');
+  const [url, setUrl] = useState(initial?.url || '');
+  const [memo, setMemo] = useState(initial?.memo || '');
+  const [category, setCategory] = useState(initial?.category || (categories[0] && categories[0].name) || 'おかず');
+  const [tags, setTags] = useState(initial?.tags || []);
+  const [tagInput, setTagInput] = useState('');
+  const [emoji, setEmoji] = useState(initial?.emoji || '🍳');
+  const [imageData, setImageData] = useState(initial?.imageData || null);
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    // Resize to keep localStorage usage reasonable
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxSize = 800;
+        let { width, height } = img;
+        if (width > maxSize || height > maxSize) {
+          if (width > height) { height *= maxSize / width; width = maxSize; }
+          else { width *= maxSize / height; height = maxSize; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        setImageData(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const addTag = () => {
+    const t = tagInput.trim();
+    if (t && !tags.includes(t)) { setTags([...tags, t]); setTagInput(''); }
+  };
+  const removeTag = (t) => setTags(tags.filter(x => x !== t));
+
+  const handleSave = () => {
+    if (!formTitle.trim()) { alert('タイトルを入れてね'); return; }
+    onSave({
+      title: formTitle.trim(), url: url.trim(), memo: memo.trim(),
+      category, tags, emoji, imageData
+    });
+  };
+
+  return (
+    <div style={{ padding: '20px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div onClick={onCancel} style={{ cursor: 'pointer', padding: '8px' }}><X size={22} /></div>
+        <div style={{ fontSize: '16px', fontWeight: 700 }}>{title}</div>
+        <div onClick={handleSave} style={{
+          cursor: 'pointer', padding: '8px 16px', background: COLORS.accent,
+          color: 'white', borderRadius: '20px', fontSize: '13px', fontWeight: 700,
+          display: 'flex', alignItems: 'center', gap: '4px'
+        }}>
+          <Check size={14} color="white" /> 保存
+        </div>
+      </div>
+
+      <div style={{ background: COLORS.card, borderRadius: '20px', padding: '16px', marginBottom: '16px' }}>
+        <Label>写真（任意）</Label>
+        {imageData ? (
+          <div style={{ position: 'relative', borderRadius: '14px', overflow: 'hidden', marginBottom: '8px' }}>
+            <img src={imageData} alt="" style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block' }} />
+            <div onClick={() => setImageData(null)} style={{
+              position: 'absolute', top: '8px', right: '8px', background: 'white',
+              borderRadius: '50%', width: '28px', height: '28px', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+            }}><X size={14} /></div>
+          </div>
+        ) : (
+          <label style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+            height: '100px', background: COLORS.bg, borderRadius: '14px', cursor: 'pointer',
+            border: `2px dashed ${COLORS.border}`, color: COLORS.textLight, fontSize: '13px'
+          }}>
+            <ImageIcon size={18} />
+            <span>写真を追加</span>
+            <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+          </label>
+        )}
+
+        {!imageData && (
+          <>
+            <Label style={{ marginTop: '12px' }}>アイコン</Label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                width: '52px', height: '52px', borderRadius: '12px',
+                background: getCategory(category, categories).color,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '28px', flexShrink: 0
+              }}>{emoji || '?'}</div>
+              <input
+                type="text" value={emoji}
+                onChange={e => setEmoji(e.target.value)}
+                placeholder="絵文字を入力"
+                style={{
+                  flex: 1, padding: '12px 14px', border: `1.5px solid ${COLORS.border}`,
+                  borderRadius: '14px', fontSize: '14px', background: COLORS.bg,
+                  outline: 'none', boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            <div style={{ fontSize: '10px', color: COLORS.textLight, marginTop: '6px', lineHeight: 1.5 }}>
+              スマホはキーボードの絵文字ボタンから、PCは <kbd style={{ background: COLORS.surface, padding: '1px 6px', borderRadius: '4px', fontSize: '10px' }}>Win + .</kbd> または <kbd style={{ background: COLORS.surface, padding: '1px 6px', borderRadius: '4px', fontSize: '10px' }}>Ctrl + Cmd + Space</kbd>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div style={{ background: COLORS.card, borderRadius: '20px', padding: '16px', marginBottom: '16px' }}>
+        <Label>タイトル *</Label>
+        <Input value={formTitle} onChange={setFormTitle} placeholder="例：とろとろチーズオムライス" />
+        <Label style={{ marginTop: '12px' }}>URL（Instagramなど）</Label>
+        <Input value={url} onChange={setUrl} placeholder="https://..." />
+        <Label style={{ marginTop: '12px' }}>メモ</Label>
+        <textarea
+          value={memo} onChange={e => setMemo(e.target.value)}
+          placeholder="ポイントやコツなど..." rows={3}
+          style={{
+            width: '100%', padding: '12px 14px',
+            border: `1.5px solid ${COLORS.border}`, borderRadius: '14px',
+            fontSize: '13px', background: COLORS.bg,
+            outline: 'none', resize: 'vertical', boxSizing: 'border-box'
+          }}
+        />
+      </div>
+
+      <div style={{ background: COLORS.card, borderRadius: '20px', padding: '16px', marginBottom: '16px' }}>
+        <Label>カテゴリー</Label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+          {categories.map(c => (
+            <div key={c.name} onClick={() => setCategory(c.name)} style={{
+              padding: '10px', borderRadius: '12px',
+              background: category === c.name ? c.color : COLORS.surface,
+              textAlign: 'center', cursor: 'pointer',
+              border: category === c.name ? `1.5px solid ${c.deep}` : '1.5px solid transparent'
+            }}>
+              <div style={{ fontSize: '22px' }}>{c.emoji}</div>
+              <div style={{ fontSize: '11px', fontWeight: 600, marginTop: '2px' }}>{c.name}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: '11px', color: COLORS.textLight, marginTop: '8px' }}>
+          ※ カテゴリーは「設定」から追加・編集できます
+        </div>
+      </div>
+
+      <div style={{ background: COLORS.card, borderRadius: '20px', padding: '16px', marginBottom: '16px' }}>
+        <Label>タグ（ハッシュタグ）</Label>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input
+            type="text" value={tagInput}
+            onChange={e => setTagInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
+            placeholder="例：お弁当"
+            style={{
+              flex: 1, padding: '10px 12px',
+              border: `1.5px solid ${COLORS.border}`, borderRadius: '12px',
+              fontSize: '13px', background: COLORS.bg, outline: 'none'
+            }}
+          />
+          <div onClick={addTag} style={{
+            padding: '10px 14px', background: COLORS.text, color: 'white', borderRadius: '12px',
+            fontSize: '12px', fontWeight: 700, cursor: 'pointer'
+          }}>追加</div>
+        </div>
+        {tags.length > 0 && (
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '10px' }}>
+            {tags.map(t => (
+              <div key={t} style={{
+                padding: '5px 10px', background: COLORS.surface, borderRadius: '14px',
+                fontSize: '11px', fontWeight: 600, color: COLORS.textMid,
+                display: 'flex', alignItems: 'center', gap: '4px'
+              }}>
+                #{t}
+                <X size={12} color={COLORS.textMid} style={{ cursor: 'pointer' }} onClick={() => removeTag(t)} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Label({ children, style }) {
+  return (
+    <div style={{ fontSize: '12px', fontWeight: 700, color: COLORS.text, marginBottom: '8px', ...style }}>
+      {children}
+    </div>
+  );
+}
+
+function Input({ value, onChange, placeholder }) {
+  return (
+    <input
+      type="text" value={value} onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{
+        width: '100%', padding: '12px 14px',
+        border: `1.5px solid ${COLORS.border}`, borderRadius: '14px',
+        fontSize: '13px', background: COLORS.bg,
+        outline: 'none', boxSizing: 'border-box'
+      }}
+    />
+  );
+}
+
+// ========== Detail ==========
+function DetailView({ recipe, categories, onBack, onEdit, onDelete, onCook }) {
+  const [showCookModal, setShowCookModal] = useState(false);
+  const [cookMemo, setCookMemo] = useState('');
+  const cat = getCategory(recipe.category, categories);
+
+  const heroStyle = recipe.imageData ? {
+    backgroundImage: `url(${recipe.imageData})`,
+    backgroundSize: 'cover', backgroundPosition: 'center'
+  } : { background: cat.color };
+
+  return (
+    <div style={{ paddingBottom: '40px' }}>
+      <div style={{
+        position: 'relative', height: '240px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '100px', ...heroStyle
+      }}>
+        {!recipe.imageData && recipe.emoji}
+
+        <div onClick={onBack} style={{
+          position: 'absolute', top: '16px', left: '16px',
+          background: 'white', borderRadius: '50%', width: '36px', height: '36px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }}><ArrowLeft size={18} /></div>
+        <div onClick={onEdit} style={{
+          position: 'absolute', top: '16px', right: '56px',
+          background: 'white', borderRadius: '50%', width: '36px', height: '36px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }}><Edit3 size={16} /></div>
+        <div onClick={() => { if (confirm('削除していい？')) onDelete(); }} style={{
+          position: 'absolute', top: '16px', right: '16px',
+          background: 'white', borderRadius: '50%', width: '36px', height: '36px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }}><Trash2 size={16} color={COLORS.accent} /></div>
+      </div>
+
+      <div style={{ padding: '20px 16px' }}>
+        <div style={{
+          display: 'inline-block', padding: '4px 12px',
+          background: cat.color, borderRadius: '10px',
+          fontSize: '11px', fontWeight: 700, marginBottom: '10px',
+          color: COLORS.text
+        }}>{cat.emoji} {cat.name}</div>
+
+        <div style={{ fontSize: '22px', fontWeight: 800, marginBottom: '8px', lineHeight: 1.3 }}>
+          {recipe.title}
+        </div>
+
+        <div style={{ fontSize: '11px', color: COLORS.textLight, marginBottom: '16px' }}>
+          {formatMonth(recipe.createdAt)}に保存
+        </div>
+
+        {recipe.tags.length > 0 && (
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
+            {recipe.tags.map(t => (
+              <div key={t} style={{
+                padding: '4px 10px', background: COLORS.surface,
+                borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                color: COLORS.textMid
+              }}>#{t}</div>
+            ))}
+          </div>
+        )}
+
+        {recipe.url && (
+          <a href={recipe.url} target="_blank" rel="noopener noreferrer" style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '12px 14px', background: COLORS.card,
+            borderRadius: '12px', marginBottom: '16px',
+            border: `1px solid ${COLORS.border}`,
+            textDecoration: 'none', color: COLORS.text
+          }}>
+            <Link2 size={16} color={COLORS.textMid} />
+            <div style={{ fontSize: '12px', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: COLORS.textMid }}>
+              {recipe.url}
+            </div>
+          </a>
+        )}
+
+        {recipe.memo && (
+          <div style={{
+            background: COLORS.surface, borderRadius: '12px', padding: '14px',
+            marginBottom: '20px', fontSize: '13px', lineHeight: 1.6,
+            color: COLORS.text
+          }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.textLight, marginBottom: '6px' }}>
+              MEMO
+            </div>
+            {recipe.memo}
+          </div>
+        )}
+
+        <div style={{
+          background: COLORS.accentSoft,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: '14px', padding: '16px', marginBottom: '20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.textMid }}>作ったよ記録</div>
+              <div style={{ fontSize: '22px', fontWeight: 800, color: COLORS.text }}>
+                {recipe.cookedLogs.length}<span style={{ fontSize: '13px', color: COLORS.textMid }}> 回</span>
+              </div>
+            </div>
+            <div onClick={() => setShowCookModal(true)} style={{
+              background: COLORS.accent, color: 'white',
+              borderRadius: '20px', padding: '10px 16px',
+              fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '6px'
+            }}>
+              <ChefHat size={14} color="white" />
+              作ったよ！
+            </div>
+          </div>
+
+          {recipe.cookedLogs.length > 0 && (
+            <div style={{ background: COLORS.card, borderRadius: '10px', padding: '10px' }}>
+              {recipe.cookedLogs.slice().reverse().slice(0, 3).map((log, i) => (
+                <div key={i} style={{
+                  padding: '6px 0',
+                  borderBottom: i < Math.min(2, recipe.cookedLogs.length - 1) ? `1px solid ${COLORS.border}` : 'none',
+                  fontSize: '12px'
+                }}>
+                  <span style={{ fontWeight: 700, color: COLORS.accent }}>{formatDate(log.date)}</span>
+                  {log.memo && <span style={{ marginLeft: '8px', color: COLORS.text }}>{log.memo}</span>}
+                </div>
+              ))}
+              {recipe.cookedLogs.length > 3 && (
+                <div style={{ fontSize: '10px', color: COLORS.textLight, marginTop: '4px' }}>
+                  他 {recipe.cookedLogs.length - 3} 回
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showCookModal && (
+        <div onClick={() => setShowCookModal(false)} style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.4)', display: 'flex',
+          alignItems: 'flex-end', justifyContent: 'center', zIndex: 100
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'white', width: '100%', maxWidth: '480px',
+            borderRadius: '24px 24px 0 0', padding: '24px 20px'
+          }}>
+            <div style={{ fontSize: '18px', fontWeight: 800, marginBottom: '8px' }}>
+              🎉 作ったよ記録
+            </div>
+            <div style={{ fontSize: '12px', color: COLORS.textLight, marginBottom: '16px' }}>
+              今日の感想をひとことどうぞ（省略OK）
+            </div>
+            <textarea
+              value={cookMemo} onChange={e => setCookMemo(e.target.value)}
+              placeholder="おいしかった〜！" rows={3}
+              style={{
+                width: '100%', padding: '12px', border: `1.5px solid ${COLORS.border}`,
+                borderRadius: '14px', fontSize: '13px', background: COLORS.bg,
+                outline: 'none', boxSizing: 'border-box', marginBottom: '12px', resize: 'none'
+              }}
+            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div onClick={() => setShowCookModal(false)} style={{
+                flex: 1, padding: '12px', textAlign: 'center',
+                background: COLORS.bg, borderRadius: '14px',
+                fontSize: '13px', fontWeight: 700, cursor: 'pointer'
+              }}>キャンセル</div>
+              <div onClick={() => { onCook(cookMemo); setCookMemo(''); setShowCookModal(false); }} style={{
+                flex: 1, padding: '12px', textAlign: 'center',
+                background: COLORS.accent, color: 'white', borderRadius: '14px',
+                fontSize: '13px', fontWeight: 700, cursor: 'pointer'
+              }}>記録する</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========== Settings ==========
+function SettingsView({ recipes, categories, onAddCategory, onUpdateCategory, onDeleteCategory, onClear }) {
+  const totalCooked = recipes.reduce((sum, r) => sum + r.cookedLogs.length, 0);
+
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify({ recipes, categories }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `recipe-stock-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importData = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        // 旧フォーマット（配列のみ）にも対応
+        const importRecipes = Array.isArray(data) ? data : data.recipes;
+        const importCats = Array.isArray(data) ? null : data.categories;
+        if (!Array.isArray(importRecipes)) throw new Error('Invalid');
+        if (confirm(`${importRecipes.length}件のレシピを読み込みます。今のデータは上書きされます。よろしいですか？`)) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(importRecipes));
+          if (importCats) localStorage.setItem(CATEGORIES_KEY, JSON.stringify(importCats));
+          location.reload();
+        }
+      } catch (err) {
+        alert('ファイルが読み込めませんでした');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div style={{ padding: '20px 16px' }}>
+      <div style={{ fontSize: '22px', fontWeight: 800, marginBottom: '20px' }}>設定</div>
+
+      <div style={{
+        background: COLORS.accentSoft, border: `1px solid ${COLORS.border}`,
+        borderRadius: '14px', padding: '16px', marginBottom: '16px'
+      }}>
+        <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: '10px', color: COLORS.textMid }}>STATS</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ background: COLORS.card, borderRadius: '10px', padding: '12px' }}>
+            <div style={{ fontSize: '11px', color: COLORS.textLight }}>保存レシピ</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: COLORS.text }}>{recipes.length}</div>
+          </div>
+          <div style={{ background: COLORS.card, borderRadius: '10px', padding: '12px' }}>
+            <div style={{ fontSize: '11px', color: COLORS.textLight }}>作った回数</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: COLORS.text }}>{totalCooked}</div>
+          </div>
+        </div>
+      </div>
+
+      <CategoryManager
+        categories={categories}
+        onAdd={onAddCategory}
+        onUpdate={onUpdateCategory}
+        onDelete={onDeleteCategory}
+      />
+
+      <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.textMid, margin: '20px 0 8px', paddingLeft: '4px' }}>
+        データのバックアップ
+      </div>
+      <div style={{ background: COLORS.card, borderRadius: '12px', marginBottom: '16px', border: `1px solid ${COLORS.border}`, overflow: 'hidden' }}>
+        <div onClick={exportData} style={{
+          padding: '14px 16px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+          borderBottom: `1px solid ${COLORS.border}`, color: COLORS.text
+        }}>
+          データをファイルに書き出す
+        </div>
+        <label style={{ display: 'block', padding: '14px 16px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: COLORS.text }}>
+          ファイルから読み込む
+          <input type="file" accept="application/json,.json" onChange={importData} style={{ display: 'none' }} />
+        </label>
+      </div>
+
+      <div onClick={onClear} style={{
+        background: COLORS.card, borderRadius: '12px', padding: '14px',
+        cursor: 'pointer', border: `1px solid ${COLORS.border}`,
+        fontSize: '13px', color: COLORS.accentDeep, fontWeight: 600, textAlign: 'center'
+      }}>すべてのレシピを削除</div>
+
+      <div style={{ marginTop: '30px', textAlign: 'center', fontSize: '11px', color: COLORS.textLight }}>
+        🍳 わたしのレシピ帳 v1.0（モック版）
+        <div style={{ marginTop: '4px' }}>データはこの端末のブラウザに保存されます</div>
+      </div>
+    </div>
+  );
+}
+
+// ========== Category Manager ==========
+function CategoryManager({ categories, onAdd, onUpdate, onDelete }) {
+  const [editing, setEditing] = useState(null); // null=なし, 'new'=新規, name=既存編集
+  const [name, setName] = useState('');
+  const [emoji, setEmoji] = useState('🍽️');
+  const [paletteIdx, setPaletteIdx] = useState(0);
+
+  const startNew = () => {
+    setEditing('new');
+    setName('');
+    setEmoji('🍽️');
+    setPaletteIdx(0);
+  };
+
+  const startEdit = (c) => {
+    setEditing(c.name);
+    setName(c.name);
+    setEmoji(c.emoji);
+    const idx = CATEGORY_PALETTES.findIndex(p => p.color === c.color);
+    setPaletteIdx(idx >= 0 ? idx : 0);
+  };
+
+  const handleSave = () => {
+    const trimmed = name.trim();
+    if (!trimmed) { alert('名前を入れてね'); return; }
+    const palette = CATEGORY_PALETTES[paletteIdx];
+    const cat = { name: trimmed, emoji, color: palette.color, deep: palette.deep };
+    const ok = editing === 'new' ? onAdd(cat) : onUpdate(editing, cat);
+    if (ok) setEditing(null);
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 0 8px', paddingLeft: '4px' }}>
+        <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.textMid }}>カテゴリー</div>
+        {editing === null && (
+          <div onClick={startNew} style={{
+            display: 'flex', alignItems: 'center', gap: '4px',
+            padding: '6px 12px', background: COLORS.accent, color: 'white',
+            borderRadius: '14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+          }}>
+            <Plus size={12} color="white" /> 追加
+          </div>
+        )}
+      </div>
+
+      <div style={{ background: COLORS.card, borderRadius: '12px', border: `1px solid ${COLORS.border}`, overflow: 'hidden', marginBottom: '8px' }}>
+        {categories.map((c, i) => (
+          <div key={c.name} style={{
+            display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '10px 14px',
+            borderBottom: i < categories.length - 1 ? `1px solid ${COLORS.border}` : 'none'
+          }}>
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '10px', background: c.color,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0
+            }}>{c.emoji}</div>
+            <div style={{ flex: 1, fontSize: '13px', fontWeight: 600 }}>{c.name}</div>
+            <div onClick={() => startEdit(c)} style={{ padding: '6px', cursor: 'pointer' }}>
+              <Edit3 size={14} color={COLORS.textMid} />
+            </div>
+            <div onClick={() => onDelete(c.name)} style={{ padding: '6px', cursor: 'pointer' }}>
+              <Trash2 size={14} color={COLORS.accent} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {editing !== null && (
+        <div style={{
+          background: COLORS.card, borderRadius: '12px',
+          border: `1.5px solid ${COLORS.accent}`, padding: '14px', marginBottom: '8px'
+        }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '10px', color: COLORS.accent }}>
+            {editing === 'new' ? '新しいカテゴリー' : `「${editing}」を編集`}
+          </div>
+
+          <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.textMid, marginBottom: '4px' }}>名前</div>
+          <input
+            type="text" value={name} onChange={e => setName(e.target.value)}
+            placeholder="例：レンジ・お弁当"
+            style={{
+              width: '100%', padding: '10px 12px', border: `1px solid ${COLORS.border}`,
+              borderRadius: '10px', fontSize: '13px', background: COLORS.bg,
+              outline: 'none', boxSizing: 'border-box', marginBottom: '12px'
+            }}
+          />
+
+          <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.textMid, marginBottom: '6px' }}>絵文字</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            <div style={{
+              width: '44px', height: '44px', borderRadius: '10px',
+              background: CATEGORY_PALETTES[paletteIdx].color,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '24px', flexShrink: 0
+            }}>{emoji || '?'}</div>
+            <input
+              type="text" value={emoji}
+              onChange={e => setEmoji(e.target.value)}
+              placeholder="絵文字を入力（例：🍳）"
+              style={{
+                flex: 1, padding: '10px 12px', border: `1px solid ${COLORS.border}`,
+                borderRadius: '10px', fontSize: '14px', background: COLORS.bg,
+                outline: 'none', boxSizing: 'border-box'
+              }}
+            />
+          </div>
+          <div style={{ fontSize: '10px', color: COLORS.textLight, marginTop: '-8px', marginBottom: '12px', lineHeight: 1.5 }}>
+            スマホはキーボードの絵文字ボタン、PCは <kbd style={{ background: COLORS.surface, padding: '1px 6px', borderRadius: '4px', fontSize: '10px' }}>Win + .</kbd> または <kbd style={{ background: COLORS.surface, padding: '1px 6px', borderRadius: '4px', fontSize: '10px' }}>Ctrl + Cmd + Space</kbd> で絵文字パネルが開きます
+          </div>
+
+          <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.textMid, marginBottom: '6px' }}>色</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+            {CATEGORY_PALETTES.map((p, i) => (
+              <div key={p.label} onClick={() => setPaletteIdx(i)} style={{
+                padding: '6px 10px', borderRadius: '14px',
+                background: p.color, fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                border: paletteIdx === i ? `1.5px solid ${p.deep}` : '1.5px solid transparent',
+                color: COLORS.text
+              }}>{p.label}</div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div onClick={() => setEditing(null)} style={{
+              flex: 1, padding: '10px', textAlign: 'center', background: COLORS.surface,
+              borderRadius: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer'
+            }}>キャンセル</div>
+            <div onClick={handleSave} style={{
+              flex: 1, padding: '10px', textAlign: 'center', background: COLORS.accent,
+              color: 'white', borderRadius: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer'
+            }}>保存</div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ========== Bottom Nav ==========
+function BottomNav({ view, setView }) {
+  const items = [
+    { id: 'home', label: 'ホーム', icon: Home },
+    { id: 'list', label: '一覧', icon: Grid },
+    { id: 'add', label: '追加', icon: Plus, primary: true },
+    { id: 'settings', label: '設定', icon: Heart }
+  ];
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0,
+      maxWidth: '480px', margin: '0 auto',
+      background: 'white', borderTop: `1px solid ${COLORS.border}`,
+      padding: '8px 0 12px', display: 'flex', justifyContent: 'space-around',
+      zIndex: 50
+    }}>
+      {items.map(item => {
+        const Icon = item.icon;
+        const active = view === item.id;
+        if (item.primary) {
+          return (
+            <div key={item.id} onClick={() => setView(item.id)} style={{
+              cursor: 'pointer', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', marginTop: '-16px'
+            }}>
+              <div style={{
+                width: '48px', height: '48px', borderRadius: '50%',
+                background: COLORS.accent,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(232, 134, 155, 0.35)'
+              }}>
+                <Icon size={22} color="white" strokeWidth={2.5} />
+              </div>
+              <div style={{ fontSize: '10px', fontWeight: 600, marginTop: '4px', color: COLORS.textLight }}>
+                {item.label}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div key={item.id} onClick={() => setView(item.id)} style={{
+            cursor: 'pointer', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', padding: '4px 12px'
+          }}>
+            <Icon size={22} color={active ? COLORS.text : COLORS.textLight} strokeWidth={active ? 2.5 : 2} />
+            <div style={{
+              fontSize: '10px', fontWeight: active ? 700 : 500,
+              marginTop: '4px', color: active ? COLORS.text : COLORS.textLight
+            }}>{item.label}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<RecipeStockApp />);
+  </script>
+</body>
+</html>

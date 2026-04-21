@@ -115,8 +115,18 @@ const VERSION_KEY = 'recipe-stock-version-seen';
 
 // アプリのバージョン
 // 更新時はここを上げて、CHANGELOGにエントリを追加すればポップが出る
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.3';
 const CHANGELOG = [
+  {
+    version: '1.3',
+    date: '2026-04-21',
+    title: 'Instagramリンク修正',
+    highlights: [
+      '📱 Instagram URLタップでApp Storeに飛ばされる問題を修正',
+      '🌐 タップすると自動でブラウザ内でプレビュー表示',
+      '📋 「URLコピー」ボタン追加（アプリで開きたい時に便利）'
+    ]
+  },
   {
     version: '1.2',
     date: '2026-04-21',
@@ -175,6 +185,34 @@ const safeUrl = (url) => {
   // プロトコルなしなら https を補完
   if (/^[\w-]+(\.[\w-]+)+/.test(trimmed)) return 'https://' + trimmed;
   return '';
+};
+
+// Instagram URLをApp Storeに飛ばさない形（embed）に変換する
+// iOS Safariで instagram.com を開くとApp Storeに飛ばされる問題の回避
+const toOpenableUrl = (url) => {
+  const safe = safeUrl(url);
+  if (!safe) return '';
+  // Instagram投稿/リール/TV → /embed/captioned/ に変換
+  // 例: https://www.instagram.com/p/ABC123/?igsh=xxx → https://www.instagram.com/p/ABC123/embed/captioned/
+  const m = safe.match(/^(https?:\/\/(?:www\.)?instagram\.com\/(?:p|reel|reels|tv)\/[A-Za-z0-9_-]+)/i);
+  if (m) return m[1] + '/embed/captioned/';
+  return safe;
+};
+
+// クリップボードにコピー（iOS Safari対応）
+const copyToClipboard = async (text) => {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    return true;
+  } catch (e) { return false; }
 };
 const formatMonth = (dateStr) => { const d = new Date(dateStr); return `${d.getFullYear()}年${d.getMonth() + 1}月`; };
 const monthKey = (dateStr) => { const d = new Date(dateStr); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -941,6 +979,63 @@ function Input({ value, onChange, placeholder }) {
   );
 }
 
+// ========== URL Link (Instagram対策付き) ==========
+function UrlLink({ url }) {
+  const [copied, setCopied] = useState(false);
+  const original = safeUrl(url);
+  const openable = toOpenableUrl(url);
+  const isInstagram = /^https?:\/\/(?:www\.)?instagram\.com\//i.test(original);
+
+  const handleCopy = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const ok = await copyToClipboard(original);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } else {
+      alert('コピーできませんでした');
+    }
+  };
+
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <a href={openable} target="_blank" rel="noopener noreferrer" style={{
+        display: 'flex', alignItems: 'center', gap: '8px',
+        padding: '12px 14px', background: COLORS.card,
+        borderRadius: '12px',
+        border: `1px solid ${COLORS.border}`,
+        textDecoration: 'none', color: COLORS.text
+      }}>
+        <Link2 size={16} color={COLORS.textMid} />
+        <div style={{ fontSize: '12px', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: COLORS.textMid }}>
+          {original}
+        </div>
+      </a>
+      {isInstagram && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: '8px', marginTop: '6px', paddingLeft: '4px'
+        }}>
+          <div style={{ fontSize: '10px', color: COLORS.textLight, flex: 1, lineHeight: 1.4 }}>
+            ※タップするとブラウザで開きます。<br />Instagramアプリで開きたい時はURLをコピー →
+          </div>
+          <div onClick={handleCopy} style={{
+            padding: '6px 12px',
+            background: copied ? COLORS.mint || '#DDEBDC' : COLORS.surface,
+            borderRadius: '10px', fontSize: '11px', fontWeight: 700,
+            cursor: 'pointer', whiteSpace: 'nowrap',
+            color: copied ? '#4A7C58' : COLORS.textMid,
+            border: `1px solid ${COLORS.border}`
+          }}>
+            {copied ? '✓ コピーした' : '📋 URLコピー'}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ========== Detail ==========
 function DetailView({ recipe, categories, onBack, onEdit, onDelete, onCook }) {
   const [showCookModal, setShowCookModal] = useState(false);
@@ -1010,18 +1105,7 @@ function DetailView({ recipe, categories, onBack, onEdit, onDelete, onCook }) {
         )}
 
         {safeUrl(recipe.url) && (
-          <a href={safeUrl(recipe.url)} target="_blank" rel="noopener noreferrer" style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            padding: '12px 14px', background: COLORS.card,
-            borderRadius: '12px', marginBottom: '16px',
-            border: `1px solid ${COLORS.border}`,
-            textDecoration: 'none', color: COLORS.text
-          }}>
-            <Link2 size={16} color={COLORS.textMid} />
-            <div style={{ fontSize: '12px', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: COLORS.textMid }}>
-              {recipe.url}
-            </div>
-          </a>
+          <UrlLink url={recipe.url} />
         )}
 
         {recipe.memo && (

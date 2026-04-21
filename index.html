@@ -111,7 +111,51 @@ const SAMPLE_RECIPES = [];
 
 const STORAGE_KEY = 'recipe-stock-data';
 const CATEGORIES_KEY = 'recipe-stock-categories';
-const getCategory = (name, categories) => (categories || DEFAULT_CATEGORIES).find(c => c.name === name) || (categories || DEFAULT_CATEGORIES)[0];
+const getCategory = (name, categories) => {
+  const list = (categories && categories.length > 0) ? categories : DEFAULT_CATEGORIES;
+  return list.find(c => c.name === name) || list[0];
+};
+
+// 旧データ／壊れたJSON読込時の欠損フィールドを補う
+const normalizeRecipe = (r) => ({
+  id: r.id || Date.now().toString(),
+  title: r.title || '（無題）',
+  url: r.url || '',
+  memo: r.memo || '',
+  category: r.category || (DEFAULT_CATEGORIES[0] && DEFAULT_CATEGORIES[0].name) || '',
+  tags: Array.isArray(r.tags) ? r.tags : [],
+  emoji: r.emoji || '🍳',
+  imageData: r.imageData || null,
+  createdAt: r.createdAt || new Date().toISOString().split('T')[0],
+  lastViewedAt: r.lastViewedAt || r.createdAt || new Date().toISOString().split('T')[0],
+  cookedLogs: Array.isArray(r.cookedLogs) ? r.cookedLogs : []
+});
+
+const normalizeRecipes = (arr) => Array.isArray(arr) ? arr.map(normalizeRecipe) : [];
+
+const normalizeCategory = (c) => ({
+  name: (c && c.name) || 'その他',
+  color: (c && c.color) || '#FCE0E6',
+  deep: (c && c.deep) || '#E8869B',
+  emoji: (c && c.emoji) || '🍽️'
+});
+
+const normalizeCategories = (arr) => {
+  if (!Array.isArray(arr) || arr.length === 0) return DEFAULT_CATEGORIES;
+  return arr.map(normalizeCategory);
+};
+
+// javascript: など危険なスキームを弾く
+const safeUrl = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  // http/https/mailto/tel のみ許可、それ以外（javascript:等）は無効
+  if (/^(https?:\/\/|mailto:|tel:)/i.test(trimmed)) return trimmed;
+  // プロトコルなしなら https を補完
+  if (/^[\w-]+(\.[\w-]+)+/.test(trimmed)) return 'https://' + trimmed;
+  return '';
+};
 const formatMonth = (dateStr) => { const d = new Date(dateStr); return `${d.getFullYear()}年${d.getMonth() + 1}月`; };
 const monthKey = (dateStr) => { const d = new Date(dateStr); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 const formatDate = (dateStr) => { const d = new Date(dateStr); return `${d.getMonth() + 1}/${d.getDate()}`; };
@@ -128,13 +172,14 @@ function RecipeStockApp() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setRecipes(JSON.parse(saved));
+      if (saved) setRecipes(normalizeRecipes(JSON.parse(saved)));
       else localStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_RECIPES));
 
       const savedCats = localStorage.getItem(CATEGORIES_KEY);
-      if (savedCats) setCategories(JSON.parse(savedCats));
+      if (savedCats) setCategories(normalizeCategories(JSON.parse(savedCats)));
       else localStorage.setItem(CATEGORIES_KEY, JSON.stringify(DEFAULT_CATEGORIES));
     } catch (e) {
+      console.error('データ読み込みエラー:', e);
       setRecipes(SAMPLE_RECIPES);
       setCategories(DEFAULT_CATEGORIES);
     }
@@ -576,25 +621,39 @@ function AddEditView({ initial, categories, onSave, onCancel, title }) {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('画像ファイルを選んでね');
+      e.target.value = '';
+      return;
+    }
     // Resize to keep localStorage usage reasonable
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
       img.onload = () => {
-        const maxSize = 800;
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          if (width > height) { height *= maxSize / width; width = maxSize; }
-          else { width *= maxSize / height; height = maxSize; }
+        try {
+          const maxSize = 800;
+          let { width, height } = img;
+          if (width > maxSize || height > maxSize) {
+            if (width > height) { height *= maxSize / width; width = maxSize; }
+            else { width *= maxSize / height; height = maxSize; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          setImageData(canvas.toDataURL('image/jpeg', 0.85));
+        } catch (err) {
+          console.error(err);
+          alert('画像の処理に失敗しました');
         }
-        const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        setImageData(canvas.toDataURL('image/jpeg', 0.85));
       };
+      img.onerror = () => alert('画像が読み込めませんでした');
       img.src = ev.target.result;
     };
+    reader.onerror = () => alert('ファイルが開けませんでした');
     reader.readAsDataURL(file);
+    // 同じファイルを再度選べるようにクリア
+    e.target.value = '';
   };
 
   const addTag = () => {
@@ -843,8 +902,8 @@ function DetailView({ recipe, categories, onBack, onEdit, onDelete, onCook }) {
           </div>
         )}
 
-        {recipe.url && (
-          <a href={recipe.url} target="_blank" rel="noopener noreferrer" style={{
+        {safeUrl(recipe.url) && (
+          <a href={safeUrl(recipe.url)} target="_blank" rel="noopener noreferrer" style={{
             display: 'flex', alignItems: 'center', gap: '8px',
             padding: '12px 14px', background: COLORS.card,
             borderRadius: '12px', marginBottom: '16px',
@@ -981,20 +1040,29 @@ function SettingsView({ recipes, categories, onAddCategory, onUpdateCategory, on
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target.result);
-        // 旧フォーマット（配列のみ）にも対応
-        const importRecipes = Array.isArray(data) ? data : data.recipes;
-        const importCats = Array.isArray(data) ? null : data.categories;
-        if (!Array.isArray(importRecipes)) throw new Error('Invalid');
-        if (confirm(`${importRecipes.length}件のレシピを読み込みます。今のデータは上書きされます。よろしいですか？`)) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(importRecipes));
-          if (importCats) localStorage.setItem(CATEGORIES_KEY, JSON.stringify(importCats));
+        // 旧フォーマット（配列のみ）と新フォーマット（{recipes, categories}）に対応
+        const rawRecipes = Array.isArray(data) ? data : (data && data.recipes);
+        const rawCats = (!Array.isArray(data) && data) ? data.categories : null;
+        if (!Array.isArray(rawRecipes)) {
+          alert('ファイル形式が違うみたい。レシピ帳から書き出したJSONを選んでね');
+          return;
+        }
+        const normalized = normalizeRecipes(rawRecipes);
+        const normalizedCats = Array.isArray(rawCats) && rawCats.length > 0 ? normalizeCategories(rawCats) : null;
+        if (confirm(`${normalized.length}件のレシピを読み込みます。今のデータは上書きされます。よろしいですか？`)) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+          if (normalizedCats) localStorage.setItem(CATEGORIES_KEY, JSON.stringify(normalizedCats));
           location.reload();
         }
       } catch (err) {
-        alert('ファイルが読み込めませんでした');
+        console.error(err);
+        alert('ファイルが読み込めませんでした。JSONの中身が壊れていないか確認してね');
       }
     };
+    reader.onerror = () => alert('ファイルが開けませんでした');
     reader.readAsText(file);
+    // 同じファイルを再度選べるように input の値をクリア
+    e.target.value = '';
   };
 
   return (

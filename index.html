@@ -111,6 +111,26 @@ const SAMPLE_RECIPES = [];
 
 const STORAGE_KEY = 'recipe-stock-data';
 const CATEGORIES_KEY = 'recipe-stock-categories';
+const VERSION_KEY = 'recipe-stock-version-seen';
+
+// アプリのバージョン
+// 更新時はここを上げて、CHANGELOGにエントリを追加すればポップが出る
+const APP_VERSION = '1.2';
+const CHANGELOG = [
+  {
+    version: '1.2',
+    date: '2026-04-21',
+    title: '使いやすさアップデート',
+    highlights: [
+      '🎀 アプリアイコンを新しくしたよ',
+      '⚙️ カテゴリーを自由に追加・編集・削除できるようになったよ',
+      '✏️ 絵文字は直接入力できるようにしたよ（カスタム自由）',
+      '🛡️ 壊れたデータでも落ちないように強化',
+      '📖 使い方マニュアルを追加（設定画面から見れるよ）'
+    ]
+  }
+  // 次回以降はここに新しいエントリを先頭に追加していく
+];
 const getCategory = (name, categories) => {
   const list = (categories && categories.length > 0) ? categories : DEFAULT_CATEGORIES;
   return list.find(c => c.name === name) || list[0];
@@ -168,6 +188,7 @@ function RecipeStockApp() {
   const [view, setView] = useState('home');
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [versionPopup, setVersionPopup] = useState(null); // 表示するバージョン情報
 
   useEffect(() => {
     try {
@@ -178,6 +199,21 @@ function RecipeStockApp() {
       const savedCats = localStorage.getItem(CATEGORIES_KEY);
       if (savedCats) setCategories(normalizeCategories(JSON.parse(savedCats)));
       else localStorage.setItem(CATEGORIES_KEY, JSON.stringify(DEFAULT_CATEGORIES));
+
+      // バージョン確認：初回は無音で保存、更新後の起動ではポップアップ
+      const seenVersion = localStorage.getItem(VERSION_KEY);
+      const hasData = !!saved; // 既存ユーザー判定
+      if (seenVersion === null) {
+        // 初回起動 → 既存データがあるなら「どこかのバージョンから飛んできた」と見なしてポップ表示
+        if (hasData) {
+          const entry = CHANGELOG.find(c => c.version === APP_VERSION);
+          if (entry) setVersionPopup(entry);
+        }
+        localStorage.setItem(VERSION_KEY, APP_VERSION);
+      } else if (seenVersion !== APP_VERSION) {
+        const entry = CHANGELOG.find(c => c.version === APP_VERSION);
+        if (entry) setVersionPopup(entry);
+      }
     } catch (e) {
       console.error('データ読み込みエラー:', e);
       setRecipes(SAMPLE_RECIPES);
@@ -185,6 +221,16 @@ function RecipeStockApp() {
     }
     setLoading(false);
   }, []);
+
+  const dismissVersionPopup = () => {
+    localStorage.setItem(VERSION_KEY, APP_VERSION);
+    setVersionPopup(null);
+  };
+
+  const openVersionPopup = () => {
+    const entry = CHANGELOG.find(c => c.version === APP_VERSION) || CHANGELOG[0];
+    if (entry) setVersionPopup(entry);
+  };
 
   const saveRecipes = (newRecipes) => {
     setRecipes(newRecipes);
@@ -320,9 +366,70 @@ function RecipeStockApp() {
       {view === 'add' && <AddEditView categories={categories} onSave={addRecipe} onCancel={() => setView('home')} title="新しく保存" />}
       {view === 'detail' && selected && <DetailView recipe={selected} categories={categories} onBack={() => setView('list')} onEdit={() => { setEditingId(selectedId); setView('edit'); }} onDelete={() => deleteRecipe(selected.id)} onCook={(memo) => markAsCooked(selected.id, memo)} />}
       {view === 'edit' && editing && <AddEditView initial={editing} categories={categories} onSave={(data) => updateRecipe(editing.id, data)} onCancel={() => setView('detail')} title="編集する" />}
-      {view === 'settings' && <SettingsView recipes={recipes} categories={categories} onAddCategory={addCategory} onUpdateCategory={updateCategory} onDeleteCategory={deleteCategory} onClear={clearAll} />}
+      {view === 'settings' && <SettingsView recipes={recipes} categories={categories} onAddCategory={addCategory} onUpdateCategory={updateCategory} onDeleteCategory={deleteCategory} onClear={clearAll} onShowChangelog={openVersionPopup} />}
 
       {view !== 'add' && view !== 'edit' && <BottomNav view={view} setView={setView} />}
+
+      {versionPopup && <VersionPopup entry={versionPopup} onClose={dismissVersionPopup} />}
+    </div>
+  );
+}
+
+// ========== Version Popup ==========
+function VersionPopup({ entry, onClose }) {
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      background: 'rgba(0,0,0,0.4)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center', zIndex: 200,
+      padding: '20px'
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'white', width: '100%', maxWidth: '360px',
+        borderRadius: '20px', padding: '24px 20px',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+          <div style={{ fontSize: '40px', marginBottom: '4px' }}>🎀</div>
+          <div style={{
+            display: 'inline-block', padding: '3px 12px',
+            background: COLORS.accentSoft, color: COLORS.accent,
+            borderRadius: '12px', fontSize: '11px', fontWeight: 700,
+            marginBottom: '8px'
+          }}>
+            ver {entry.version}
+          </div>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: COLORS.text }}>
+            {entry.title}
+          </div>
+          {entry.date && (
+            <div style={{ fontSize: '11px', color: COLORS.textLight, marginTop: '4px' }}>
+              {entry.date}
+            </div>
+          )}
+        </div>
+
+        <div style={{
+          background: COLORS.accentSoft, borderRadius: '14px',
+          padding: '14px', marginBottom: '16px'
+        }}>
+          {entry.highlights.map((h, i) => (
+            <div key={i} style={{
+              fontSize: '13px', lineHeight: 1.7, color: COLORS.text,
+              paddingLeft: '4px'
+            }}>{h}</div>
+          ))}
+        </div>
+
+        <div onClick={onClose} style={{
+          padding: '12px', textAlign: 'center',
+          background: COLORS.accent, color: 'white',
+          borderRadius: '14px', fontSize: '14px', fontWeight: 700,
+          cursor: 'pointer'
+        }}>
+          わかった ♡
+        </div>
+      </div>
     </div>
   );
 }
@@ -1020,7 +1127,7 @@ function DetailView({ recipe, categories, onBack, onEdit, onDelete, onCook }) {
 }
 
 // ========== Settings ==========
-function SettingsView({ recipes, categories, onAddCategory, onUpdateCategory, onDeleteCategory, onClear }) {
+function SettingsView({ recipes, categories, onAddCategory, onUpdateCategory, onDeleteCategory, onClear, onShowChangelog }) {
   const totalCooked = recipes.reduce((sum, r) => sum + r.cookedLogs.length, 0);
 
   const exportData = () => {
@@ -1115,8 +1222,30 @@ function SettingsView({ recipes, categories, onAddCategory, onUpdateCategory, on
         fontSize: '13px', color: COLORS.accentDeep, fontWeight: 600, textAlign: 'center'
       }}>すべてのレシピを削除</div>
 
-      <div style={{ marginTop: '30px', textAlign: 'center', fontSize: '11px', color: COLORS.textLight }}>
-        🍳 さきちゃんのレシピ帳 v1.0（モック版）
+      <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.textMid, margin: '20px 0 8px', paddingLeft: '4px' }}>
+        アプリについて
+      </div>
+      <div style={{ background: COLORS.card, borderRadius: '12px', border: `1px solid ${COLORS.border}`, overflow: 'hidden' }}>
+        <a href="https://github.com/mitsukenn/recipe-stock/blob/main/MANUAL.md" target="_blank" rel="noopener noreferrer" style={{
+          display: 'block', padding: '14px 16px', fontSize: '13px', fontWeight: 600,
+          borderBottom: `1px solid ${COLORS.border}`, color: COLORS.text, textDecoration: 'none'
+        }}>
+          📖 使い方マニュアルを開く
+        </a>
+        <div onClick={onShowChangelog} style={{
+          padding: '14px 16px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+          color: COLORS.text, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+        }}>
+          <span>🎀 最新のアップデート内容を見る</span>
+          <span style={{
+            fontSize: '10px', fontWeight: 700, color: COLORS.accent,
+            background: COLORS.accentSoft, padding: '2px 8px', borderRadius: '10px'
+          }}>ver {APP_VERSION}</span>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '11px', color: COLORS.textLight }}>
+        🍳 さきちゃんのレシピ帳 ver {APP_VERSION}
         <div style={{ marginTop: '4px' }}>データはこの端末のブラウザに保存されます</div>
       </div>
     </div>

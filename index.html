@@ -140,18 +140,8 @@ const formatMonthKey = (monthKey) => {
 
 // アプリのバージョン
 // 更新時はここを上げて、CHANGELOGにエントリを追加すればポップが出る
-const APP_VERSION = '1.6';
+const APP_VERSION = '1.5';
 const CHANGELOG = [
-  {
-    version: '1.6',
-    date: '2026-04-21',
-    title: '月初リマインダー対応',
-    highlights: [
-      '🔔 設定画面に「カレンダーに登録する」ボタン追加',
-      '📅 毎月1日朝9時にiPhoneカレンダー通知が来るよ',
-      '💌 通知から直接アプリを開いてベスト3を決められる'
-    ]
-  },
   {
     version: '1.5',
     date: '2026-04-21',
@@ -293,63 +283,6 @@ const compressImage = (img) => {
     if (approxBytes <= targetBytes) return dataUrl;
   }
   return lastResult; // 最も小さい設定の結果を返す
-};
-
-// 月初リマインダー用のiCalendarファイル（.ics）を生成
-// iPhone/Androidの標準カレンダーに繰り返し予定として登録できる
-const generateMonthlyReminderIcs = () => {
-  // 次の月の1日 朝9時を初回イベントとする（過去に作らない）
-  const now = new Date();
-  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1, 9, 0, 0);
-  const pad = (n) => String(n).padStart(2, '0');
-  const fmtLocal = (d) =>
-    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
-  const fmtUtc = (d) =>
-    `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
-  const dtStart = fmtLocal(next);
-  const dtEnd = fmtLocal(new Date(next.getTime() + 30 * 60 * 1000));
-  const dtStamp = fmtUtc(now);
-  const uid = `recipe-stock-monthly-review-${Date.now()}@mitsukenn.github.io`;
-  const url = 'https://mitsukenn.github.io/recipe-stock/';
-
-  const lines = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//Sakichan Recipe Stock//Monthly Review//JP',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-    'BEGIN:VEVENT',
-    `UID:${uid}`,
-    `DTSTAMP:${dtStamp}`,
-    `DTSTART:${dtStart}`,
-    `DTEND:${dtEnd}`,
-    'SUMMARY:🎀 先月のお料理ベスト3を選ぼう',
-    `DESCRIPTION:さきちゃんのレシピ帳を開いて先月作ったお料理のベスト3を決めよう♪\\n${url}`,
-    `URL:${url}`,
-    'RRULE:FREQ=MONTHLY;BYMONTHDAY=1',
-    'BEGIN:VALARM',
-    'TRIGGER:PT0M',
-    'ACTION:DISPLAY',
-    'DESCRIPTION:🎀 先月のお料理ベスト3を選ぼう',
-    'END:VALARM',
-    'END:VEVENT',
-    'END:VCALENDAR'
-  ];
-  // iCalendarはCRLF区切りが仕様
-  return lines.join('\r\n');
-};
-
-const downloadMonthlyReminder = () => {
-  const ics = generateMonthlyReminderIcs();
-  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'recipe-monthly-reminder.ics';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
 };
 
 // クリップボードにコピー（iOS Safari対応）
@@ -1734,26 +1667,6 @@ function SettingsView({ recipes, categories, rankings, onAddCategory, onUpdateCa
             <div style={{ fontSize: '11px', color: COLORS.textLight }}>作った回数</div>
             <div style={{ fontSize: '22px', fontWeight: 800, color: COLORS.text }}>{totalCooked}</div>
           </div>
-        </div>
-      </div>
-
-      <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.textMid, margin: '0 0 8px', paddingLeft: '4px' }}>
-        🔔 月初リマインダー
-      </div>
-      <div style={{ background: COLORS.card, borderRadius: '12px', border: `1px solid ${COLORS.border}`, padding: '14px 16px', marginBottom: '20px' }}>
-        <div style={{ fontSize: '12px', color: COLORS.textMid, lineHeight: 1.6, marginBottom: '12px' }}>
-          毎月1日 朝9時に、iPhoneのカレンダー通知で「先月のベスト3を決めよう」と教えてくれる予定を登録できるよ。
-        </div>
-        <div onClick={downloadMonthlyReminder} style={{
-          padding: '12px', textAlign: 'center', background: COLORS.accent, color: 'white',
-          borderRadius: '12px', fontSize: '13px', fontWeight: 700, cursor: 'pointer'
-        }}>
-          📅 カレンダーに登録する
-        </div>
-        <div style={{ fontSize: '10px', color: COLORS.textLight, marginTop: '8px', lineHeight: 1.5 }}>
-          ボタンをタップすると.icsファイルが開きます。<br />
-          iPhone：「カレンダーに追加」をタップ<br />
-          Android：カレンダーアプリを選んで保存
         </div>
       </div>
 

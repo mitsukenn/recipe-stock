@@ -112,11 +112,47 @@ const SAMPLE_RECIPES = [];
 const STORAGE_KEY = 'recipe-stock-data';
 const CATEGORIES_KEY = 'recipe-stock-categories';
 const VERSION_KEY = 'recipe-stock-version-seen';
+const RANKINGS_KEY = 'recipe-stock-rankings';
+const MONTHLY_REVIEW_KEY = 'recipe-stock-monthly-review-seen';
+
+// 先月のmonthKey ("YYYY-MM")
+const getLastMonthKey = () => {
+  const now = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}`;
+};
+
+// 指定月に作ったレシピ一覧（cookCount降順、lastMonthCountを付与）
+const getRecipesCookedInMonth = (recipes, monthKey) => {
+  return recipes
+    .map(r => ({
+      ...r,
+      lastMonthCount: (r.cookedLogs || []).filter(log => log && log.date && log.date.startsWith(monthKey)).length
+    }))
+    .filter(r => r.lastMonthCount > 0)
+    .sort((a, b) => b.lastMonthCount - a.lastMonthCount);
+};
+
+const formatMonthKey = (monthKey) => {
+  const [y, m] = monthKey.split('-');
+  return `${y}年${parseInt(m)}月`;
+};
 
 // アプリのバージョン
 // 更新時はここを上げて、CHANGELOGにエントリを追加すればポップが出る
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const CHANGELOG = [
+  {
+    version: '1.5',
+    date: '2026-04-21',
+    title: '月のベスト3、はじまります 🎀',
+    highlights: [
+      '🗓️ 月が変わると「先月のお料理おつかれさま！」ポップアップ',
+      '🥇 先月作ったレシピからベスト3を選べる満足度ランキング機能',
+      '📊 ホーム画面に「先月のベスト3」セクションを表示',
+      '📚 設定画面で「歴代のベスト3」をいつでも見れるよ'
+    ]
+  },
   {
     version: '1.4',
     date: '2026-04-21',
@@ -272,27 +308,35 @@ const formatDate = (dateStr) => { const d = new Date(dateStr); return `${d.getMo
 function RecipeStockApp() {
   const [recipes, setRecipes] = useState([]);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [rankings, setRankings] = useState([]); // 月別ランキング履歴
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('home');
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [versionPopup, setVersionPopup] = useState(null); // 表示するバージョン情報
+  const [versionPopup, setVersionPopup] = useState(null);
+  const [monthlyReview, setMonthlyReview] = useState(null); // {monthKey, recipes}
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setRecipes(normalizeRecipes(JSON.parse(saved)));
-      else localStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_RECIPES));
+      const loadedRecipes = saved ? normalizeRecipes(JSON.parse(saved)) : SAMPLE_RECIPES;
+      setRecipes(loadedRecipes);
+      if (!saved) localStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_RECIPES));
 
       const savedCats = localStorage.getItem(CATEGORIES_KEY);
       if (savedCats) setCategories(normalizeCategories(JSON.parse(savedCats)));
       else localStorage.setItem(CATEGORIES_KEY, JSON.stringify(DEFAULT_CATEGORIES));
 
+      const savedRankings = localStorage.getItem(RANKINGS_KEY);
+      if (savedRankings) {
+        const parsed = JSON.parse(savedRankings);
+        if (Array.isArray(parsed)) setRankings(parsed);
+      }
+
       // バージョン確認：初回は無音で保存、更新後の起動ではポップアップ
       const seenVersion = localStorage.getItem(VERSION_KEY);
-      const hasData = !!saved; // 既存ユーザー判定
+      const hasData = !!saved;
       if (seenVersion === null) {
-        // 初回起動 → 既存データがあるなら「どこかのバージョンから飛んできた」と見なしてポップ表示
         if (hasData) {
           const entry = CHANGELOG.find(c => c.version === APP_VERSION);
           if (entry) setVersionPopup(entry);
@@ -302,6 +346,19 @@ function RecipeStockApp() {
         const entry = CHANGELOG.find(c => c.version === APP_VERSION);
         if (entry) setVersionPopup(entry);
       }
+
+      // 月初レビュー：先月作ったレシピがあって未レビューならポップアップ
+      const lastMonthKey = getLastMonthKey();
+      const reviewSeen = localStorage.getItem(MONTHLY_REVIEW_KEY);
+      if (reviewSeen !== lastMonthKey) {
+        const cooked = getRecipesCookedInMonth(loadedRecipes, lastMonthKey);
+        if (cooked.length > 0) {
+          setMonthlyReview({ monthKey: lastMonthKey, recipes: cooked });
+        } else {
+          // 該当月に作った料理ナシ → 今後も出さないように既読化
+          localStorage.setItem(MONTHLY_REVIEW_KEY, lastMonthKey);
+        }
+      }
     } catch (e) {
       console.error('データ読み込みエラー:', e);
       setRecipes(SAMPLE_RECIPES);
@@ -309,6 +366,29 @@ function RecipeStockApp() {
     }
     setLoading(false);
   }, []);
+
+  const saveRankings = (newRankings) => {
+    setRankings(newRankings);
+    try {
+      localStorage.setItem(RANKINGS_KEY, JSON.stringify(newRankings));
+    } catch (e) { console.error(e); }
+  };
+
+  // 月次レビューポップアップで決定された時の処理
+  const submitMonthlyRanking = (entry) => {
+    // 既存の同月ランキングを除いて追加
+    const filtered = rankings.filter(r => r.monthKey !== entry.monthKey);
+    saveRankings([entry, ...filtered].sort((a, b) => b.monthKey.localeCompare(a.monthKey)));
+    localStorage.setItem(MONTHLY_REVIEW_KEY, entry.monthKey);
+    setMonthlyReview(null);
+  };
+
+  const dismissMonthlyReview = (markSeen) => {
+    if (markSeen && monthlyReview) {
+      localStorage.setItem(MONTHLY_REVIEW_KEY, monthlyReview.monthKey);
+    }
+    setMonthlyReview(null);
+  };
 
   const dismissVersionPopup = () => {
     localStorage.setItem(VERSION_KEY, APP_VERSION);
@@ -449,16 +529,280 @@ function RecipeStockApp() {
       background: COLORS.bg, minHeight: '100vh', color: COLORS.text,
       paddingBottom: '80px', maxWidth: '480px', margin: '0 auto', position: 'relative'
     }}>
-      {view === 'home' && <HomeView recipes={recipes} categories={categories} onSelect={handleSelect} onGoList={() => setView('list')} />}
+      {view === 'home' && <HomeView recipes={recipes} categories={categories} rankings={rankings} onSelect={handleSelect} onGoList={() => setView('list')} />}
       {view === 'list' && <ListView recipes={recipes} categories={categories} onSelect={handleSelect} />}
       {view === 'add' && <AddEditView categories={categories} onSave={addRecipe} onCancel={() => setView('home')} title="新しく保存" />}
       {view === 'detail' && selected && <DetailView recipe={selected} categories={categories} onBack={() => setView('list')} onEdit={() => { setEditingId(selectedId); setView('edit'); }} onDelete={() => deleteRecipe(selected.id)} onCook={(memo) => markAsCooked(selected.id, memo)} />}
       {view === 'edit' && editing && <AddEditView initial={editing} categories={categories} onSave={(data) => updateRecipe(editing.id, data)} onCancel={() => setView('detail')} title="編集する" />}
-      {view === 'settings' && <SettingsView recipes={recipes} categories={categories} onAddCategory={addCategory} onUpdateCategory={updateCategory} onDeleteCategory={deleteCategory} onClear={clearAll} onShowChangelog={openVersionPopup} />}
+      {view === 'settings' && <SettingsView recipes={recipes} categories={categories} rankings={rankings} onAddCategory={addCategory} onUpdateCategory={updateCategory} onDeleteCategory={deleteCategory} onClear={clearAll} onShowChangelog={openVersionPopup} onSelect={handleSelect} />}
 
       {view !== 'add' && view !== 'edit' && <BottomNav view={view} setView={setView} />}
 
       {versionPopup && <VersionPopup entry={versionPopup} onClose={dismissVersionPopup} />}
+
+      {monthlyReview && (
+        <MonthlyReviewPopup
+          data={monthlyReview}
+          categories={categories}
+          onSubmit={submitMonthlyRanking}
+          onDismiss={() => dismissMonthlyReview(false)}
+          onSkip={() => dismissMonthlyReview(true)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ========== Monthly Review Popup ==========
+function MonthlyReviewPopup({ data, categories, onSubmit, onDismiss, onSkip }) {
+  const [picks, setPicks] = useState([null, null, null]); // [1位, 2位, 3位] = recipeId
+
+  const togglePick = (recipeId) => {
+    const idx = picks.indexOf(recipeId);
+    if (idx >= 0) {
+      const next = [...picks]; next[idx] = null; setPicks(next);
+      return;
+    }
+    const empty = picks.indexOf(null);
+    if (empty >= 0) {
+      const next = [...picks]; next[empty] = recipeId; setPicks(next);
+    } else {
+      // 全枠埋まってる → 一番下（3位）を入れ替え
+      const next = [...picks]; next[2] = recipeId; setPicks(next);
+    }
+  };
+
+  const handleSubmit = () => {
+    const top3 = picks
+      .map((recipeId, i) => {
+        if (!recipeId) return null;
+        const r = data.recipes.find(x => x.id === recipeId);
+        return { rank: i + 1, recipeId, title: r ? r.title : '', emoji: r ? r.emoji : '🍳' };
+      })
+      .filter(Boolean);
+    if (top3.length === 0) {
+      if (confirm('1つも選ばずに完了する？\n（OKを押すと「今月はランキングなし」として記録します）')) {
+        onSubmit({ monthKey: data.monthKey, reviewedAt: new Date().toISOString().split('T')[0], top3: [] });
+      }
+      return;
+    }
+    onSubmit({
+      monthKey: data.monthKey,
+      reviewedAt: new Date().toISOString().split('T')[0],
+      top3
+    });
+  };
+
+  const RANK_EMOJI = ['🥇', '🥈', '🥉'];
+  const RANK_LABEL = ['1位', '2位', '3位'];
+
+  return (
+    <div onClick={onDismiss} style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      background: 'rgba(0,0,0,0.5)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center', zIndex: 200,
+      padding: '12px'
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'white', width: '100%', maxWidth: '400px',
+        maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+        borderRadius: '20px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+        overflow: 'hidden'
+      }}>
+        {/* ヘッダー */}
+        <div style={{
+          padding: '20px 20px 16px',
+          background: `linear-gradient(135deg, ${COLORS.accentSoft}, #FFF5F7)`,
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '36px' }}>🎀</div>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: COLORS.text, marginTop: '4px' }}>
+            {formatMonthKey(data.monthKey)}のお料理おつかれさま！
+          </div>
+          <div style={{ fontSize: '12px', color: COLORS.textMid, marginTop: '4px' }}>
+            {data.recipes.length}品 / 計{data.recipes.reduce((s, r) => s + r.lastMonthCount, 0)}回 作ったよ ✨
+          </div>
+        </div>
+
+        {/* 表彰台 */}
+        <div style={{ padding: '16px 20px 8px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: COLORS.textMid, marginBottom: '10px', textAlign: 'center' }}>
+            ベスト3を選ぼう ♪
+          </div>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'flex-end' }}>
+            {[1, 0, 2].map(i => { // 表示順は 2位・1位・3位
+              const recipeId = picks[i];
+              const recipe = recipeId ? data.recipes.find(r => r.id === recipeId) : null;
+              const heights = ['72px', '90px', '60px']; // 1位だけ高め
+              const isFirst = i === 0;
+              return (
+                <div key={i} style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: isFirst ? '22px' : '18px', marginBottom: '4px' }}>
+                    {RANK_EMOJI[i]}
+                  </div>
+                  <div
+                    onClick={() => recipeId && togglePick(recipeId)}
+                    style={{
+                      height: heights[i === 0 ? 1 : i === 1 ? 0 : 2],
+                      borderRadius: '12px 12px 4px 4px',
+                      background: recipe ? COLORS.accentSoft : COLORS.surface,
+                      border: recipe ? `1.5px solid ${COLORS.accent}` : `1.5px dashed ${COLORS.border}`,
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center',
+                      cursor: recipe ? 'pointer' : 'default',
+                      padding: '6px', overflow: 'hidden'
+                    }}>
+                    {recipe ? (
+                      <>
+                        <div style={{ fontSize: '24px' }}>{recipe.emoji}</div>
+                        <div style={{
+                          fontSize: '10px', fontWeight: 700, color: COLORS.text,
+                          lineHeight: 1.2, marginTop: '2px',
+                          overflow: 'hidden', textOverflow: 'ellipsis',
+                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
+                        }}>{recipe.title}</div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: '10px', color: COLORS.textLight }}>
+                        {RANK_LABEL[i]}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: '10px', color: COLORS.textLight, textAlign: 'center', marginTop: '6px' }}>
+            ↑ 表彰台のレシピをタップで外せるよ
+          </div>
+        </div>
+
+        {/* 作ったレシピ一覧 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px 0' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.textMid, marginBottom: '8px' }}>
+            タップでランクイン
+          </div>
+          {data.recipes.map(r => {
+            const rankIdx = picks.indexOf(r.id);
+            const isPicked = rankIdx >= 0;
+            return (
+              <div key={r.id} onClick={() => togglePick(r.id)} style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '10px', marginBottom: '6px',
+                background: isPicked ? COLORS.accentSoft : COLORS.surface,
+                border: isPicked ? `1.5px solid ${COLORS.accent}` : '1.5px solid transparent',
+                borderRadius: '12px', cursor: 'pointer'
+              }}>
+                <div style={{
+                  width: '40px', height: '40px', borderRadius: '10px',
+                  background: getCategory(r.category, categories).color,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '22px', flexShrink: 0
+                }}>{r.emoji}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: COLORS.text,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.title}
+                  </div>
+                  <div style={{ fontSize: '11px', color: COLORS.textLight, marginTop: '2px' }}>
+                    {r.lastMonthCount}回作った
+                  </div>
+                </div>
+                {isPicked && (
+                  <div style={{
+                    width: '28px', height: '28px', borderRadius: '50%',
+                    background: COLORS.accent, color: 'white',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '14px', fontWeight: 800
+                  }}>{rankIdx + 1}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* フッター */}
+        <div style={{ padding: '12px 20px 16px', borderTop: `1px solid ${COLORS.border}` }}>
+          <div onClick={handleSubmit} style={{
+            padding: '14px', textAlign: 'center', background: COLORS.accent,
+            color: 'white', borderRadius: '14px', fontSize: '14px', fontWeight: 700,
+            cursor: 'pointer', marginBottom: '8px'
+          }}>決定 ♡</div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div onClick={onDismiss} style={{
+              flex: 1, padding: '10px', textAlign: 'center', background: COLORS.surface,
+              borderRadius: '12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+              color: COLORS.textMid
+            }}>あとで決める</div>
+            <div onClick={onSkip} style={{
+              flex: 1, padding: '10px', textAlign: 'center', background: COLORS.surface,
+              borderRadius: '12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+              color: COLORS.textMid
+            }}>今月はスキップ</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 表彰台型のランキング表示（コンパクト版・ホーム用）
+function RankingPodium({ ranking, recipes, categories, onSelect }) {
+  const RANK_EMOJI = ['🥇', '🥈', '🥉'];
+  if (!ranking || !ranking.top3 || ranking.top3.length === 0) return null;
+
+  return (
+    <div style={{
+      background: `linear-gradient(135deg, ${COLORS.accentSoft}, #FFF5F7)`,
+      borderRadius: '16px', padding: '14px',
+      border: `1px solid ${COLORS.border}`
+    }}>
+      <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.accent, marginBottom: '10px', textAlign: 'center' }}>
+        🎀 {formatMonthKey(ranking.monthKey)}のベスト3
+      </div>
+      <div>
+        {ranking.top3.sort((a, b) => a.rank - b.rank).map(item => {
+          const recipe = recipes.find(r => r.id === item.recipeId);
+          const exists = !!recipe;
+          return (
+            <div key={item.rank}
+              onClick={() => exists && onSelect(item.recipeId)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '8px', marginBottom: '4px',
+                background: 'rgba(255,255,255,0.7)', borderRadius: '10px',
+                cursor: exists ? 'pointer' : 'default',
+                opacity: exists ? 1 : 0.6
+              }}>
+              <div style={{ fontSize: '22px', width: '28px', textAlign: 'center' }}>
+                {RANK_EMOJI[item.rank - 1]}
+              </div>
+              {recipe ? (
+                <div style={{
+                  width: '36px', height: '36px', borderRadius: '8px',
+                  background: getCategory(recipe.category, categories).color,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '20px', flexShrink: 0
+                }}>{recipe.emoji}</div>
+              ) : (
+                <div style={{
+                  width: '36px', height: '36px', borderRadius: '8px',
+                  background: COLORS.surface, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', fontSize: '16px', flexShrink: 0
+                }}>?</div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: '13px', fontWeight: 700, color: COLORS.text,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                }}>
+                  {recipe ? recipe.title : (item.title + '（削除済み）')}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -523,7 +867,7 @@ function VersionPopup({ entry, onClose }) {
 }
 
 // ========== Home ==========
-function HomeView({ recipes, categories, onSelect, onGoList }) {
+function HomeView({ recipes, categories, rankings, onSelect, onGoList }) {
   const recent = useMemo(() => {
     return [...recipes].sort((a, b) => new Date(b.lastViewedAt) - new Date(a.lastViewedAt)).slice(0, 5);
   }, [recipes]);
@@ -568,6 +912,12 @@ function HomeView({ recipes, categories, onSelect, onGoList }) {
               <div style={{ fontSize: '11px', color: COLORS.textLight, marginTop: '2px' }}>{formatMonth(reminder.createdAt)}に保存</div>
             </div>
           </div>
+        </div>
+      )}
+
+      {rankings && rankings.length > 0 && rankings[0].top3 && rankings[0].top3.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <RankingPodium ranking={rankings[0]} recipes={recipes} categories={categories} onSelect={onSelect} />
         </div>
       )}
 
@@ -1252,11 +1602,11 @@ function DetailView({ recipe, categories, onBack, onEdit, onDelete, onCook }) {
 }
 
 // ========== Settings ==========
-function SettingsView({ recipes, categories, onAddCategory, onUpdateCategory, onDeleteCategory, onClear, onShowChangelog }) {
+function SettingsView({ recipes, categories, rankings, onAddCategory, onUpdateCategory, onDeleteCategory, onClear, onShowChangelog, onSelect }) {
   const totalCooked = recipes.reduce((sum, r) => sum + r.cookedLogs.length, 0);
 
   const exportData = () => {
-    const blob = new Blob([JSON.stringify({ recipes, categories }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ recipes, categories, rankings }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1275,6 +1625,7 @@ function SettingsView({ recipes, categories, onAddCategory, onUpdateCategory, on
         // 旧フォーマット（配列のみ）と新フォーマット（{recipes, categories}）に対応
         const rawRecipes = Array.isArray(data) ? data : (data && data.recipes);
         const rawCats = (!Array.isArray(data) && data) ? data.categories : null;
+        const rawRankings = (!Array.isArray(data) && data) ? data.rankings : null;
         if (!Array.isArray(rawRecipes)) {
           alert('ファイル形式が違うみたい。レシピ帳から書き出したJSONを選んでね');
           return;
@@ -1284,6 +1635,7 @@ function SettingsView({ recipes, categories, onAddCategory, onUpdateCategory, on
         if (confirm(`${normalized.length}件のレシピを読み込みます。今のデータは上書きされます。よろしいですか？`)) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
           if (normalizedCats) localStorage.setItem(CATEGORIES_KEY, JSON.stringify(normalizedCats));
+          if (Array.isArray(rawRankings)) localStorage.setItem(RANKINGS_KEY, JSON.stringify(rawRankings));
           location.reload();
         }
       } catch (err) {
@@ -1317,6 +1669,21 @@ function SettingsView({ recipes, categories, onAddCategory, onUpdateCategory, on
           </div>
         </div>
       </div>
+
+      {rankings && rankings.length > 0 && (
+        <>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: COLORS.textMid, margin: '0 0 8px', paddingLeft: '4px' }}>
+            🎀 歴代のベスト3
+          </div>
+          <div style={{ marginBottom: '20px' }}>
+            {rankings.map(r => (
+              <div key={r.monthKey} style={{ marginBottom: '10px' }}>
+                <RankingPodium ranking={r} recipes={recipes} categories={categories} onSelect={onSelect} />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <CategoryManager
         categories={categories}
